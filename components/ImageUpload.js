@@ -12,8 +12,38 @@ class ImageUpload extends HTMLElement {
         const pasteBtn = this.shadowRoot.querySelector('.paste-btn');
 
         if (uploadBox) {
+            // 1. 클릭하면 파일 선택 창 열기
             uploadBox.addEventListener('click', () => input.click());
-            // Add drag and drop listeners if needed
+
+            // 2. 드래그 앤 드롭 기능 추가
+            uploadBox.addEventListener('dragover', (e) => {
+                e.preventDefault(); // 브라우저가 파일을 열어버리는 기본 행동 막기
+                uploadBox.classList.add('drag-over'); // 파란 테두리 보여주기
+            });
+            uploadBox.addEventListener('dragleave', () => {
+                uploadBox.classList.remove('drag-over'); // 파란 테두리 없애기
+            });
+            uploadBox.addEventListener('drop', (e) => {
+                e.preventDefault(); // 브라우저 기본 행동 막기
+                uploadBox.classList.remove('drag-over');
+                const file = e.dataTransfer.files[0]; // 끌어다 놓은 파일 가져오기
+                if (file) {
+                    this.processFile(file);
+                }
+            });
+            
+            // 3. 붙여넣기 기능 추가
+            uploadBox.addEventListener('paste', (e) => {
+                e.preventDefault();
+                const items = e.clipboardData.items;
+                for (const item of items) {
+                    if (item.type.indexOf('image') !== -1) {
+                        const blob = item.getAsFile();
+                        this.processFile(new File([blob], "pasted_image.png", { type: blob.type }));
+                        break;
+                    }
+                }
+            });
         }
 
         if(input) {
@@ -43,11 +73,11 @@ class ImageUpload extends HTMLElement {
                 if (imageType) {
                     const blob = await item.getType(imageType);
                     this.processFile(new File([blob], "pasted_image.png", { type: imageType }));
-                    break; // Stop after finding the first image
+                    break;
                 }
             }
         } catch (err) {
-            console.error('Failed to read clipboard contents: ', err);
+            console.error('클립보드 읽기 실패:', err);
         }
     }
 
@@ -68,7 +98,7 @@ class ImageUpload extends HTMLElement {
     render() {
         const iconClass = this.getAttribute('icon-class') || 'fa-user';
         const title = this.getAttribute('title') || 'Upload Image';
-        const subtitle = this.getAttribute('subtitle') || 'Click or Paste';
+        const subtitle = this.getAttribute('subtitle') || 'Click, Drag & Drop or Paste'; // 자막 수정
         const showPaste = this.hasAttribute('show-paste');
 
         this.shadowRoot.innerHTML = `
@@ -77,7 +107,7 @@ class ImageUpload extends HTMLElement {
                 :host {
                     display: flex;
                     flex-direction: column;
-                    gap: 0.75rem; /* gap-3 */
+                    gap: 0.75rem;
                     width: 100%;
                 }
                 .header {
@@ -86,16 +116,16 @@ class ImageUpload extends HTMLElement {
                     align-items: center;
                 }
                 .title {
-                    font-weight: 600; /* font-semibold */
-                    color: var(--slate-800, #1e293b);
+                    font-weight: 600;
+                    color: #1e293b;
                 }
                 .paste-btn {
                     display: ${showPaste ? 'flex' : 'none'};
                     align-items: center;
-                    gap: 0.5rem; /* gap-2 */
-                    font-size: 0.875rem; /* text-sm */
-                    font-weight: 600; /* font-semibold */
-                    color: var(--blue-600, #2563eb);
+                    gap: 0.5rem;
+                    font-size: 0.875rem;
+                    font-weight: 600;
+                    color: #2563eb;
                     cursor: pointer;
                     background: none; border: none;
                 }
@@ -105,17 +135,20 @@ class ImageUpload extends HTMLElement {
                     flex-direction: column;
                     align-items: center;
                     justify-content: center;
-                    border: 2px dashed var(--slate-300, #cbd5e1);
-                    border-radius: 1rem; /* rounded-2xl */
+                    border: 2px dashed #cbd5e1;
+                    border-radius: 1rem;
                     padding: 2rem;
                     text-align: center;
                     cursor: pointer;
-                    background-color: var(--slate-50, #f8fafc);
-                    height: 300px; /* Or adjust as needed */
-                    transition: background-color 0.2s;
+                    background-color: #f8fafc;
+                    height: 300px;
+                    transition: all 0.2s;
+                    outline: none; /* 붙여넣기 기능을 위해 추가 */
                 }
-                .upload-area:hover {
-                    background-color: var(--slate-100, #f1f5f9);
+                .upload-area:hover, .upload-area.drag-over {
+                    background-color: #eff6ff; /* 연한 파랑 */
+                    border-color: #2563eb; /* 진한 파랑 */
+                    border-style: solid;
                 }
                 .upload-content {
                     display: flex;
@@ -124,8 +157,8 @@ class ImageUpload extends HTMLElement {
                     justify-content: center;
                 }
                 .upload-icon {
-                    font-size: 2.5rem; /* text-4xl */
-                    color: var(--slate-400, #94a3b8);
+                    font-size: 2.5rem;
+                    color: #94a3b8;
                     margin-bottom: 1rem;
                 }
                 .upload-title { font-weight: 600; color: #1e293b; }
@@ -135,7 +168,7 @@ class ImageUpload extends HTMLElement {
                     top: 0; left: 0;
                     width: 100%; height: 100%;
                     object-fit: cover;
-                    border-radius: 1rem; /* rounded-2xl */
+                    border-radius: 1rem;
                 }
                 input[type="file"] { display: none; }
             </style>
@@ -146,7 +179,7 @@ class ImageUpload extends HTMLElement {
                     <span>Paste from Clipboard</span>
                 </button>
             </div>
-            <div class="upload-area">
+            <div class="upload-area" tabindex="0"> <!-- 붙여넣기 기능을 위해 tabindex 추가 -->
                 ${this.src ? `
                     <img src="${this.src}" class="preview-image" alt="Image Preview" />
                 ` : `

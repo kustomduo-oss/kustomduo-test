@@ -5,20 +5,21 @@ class AppContainer extends HTMLElement {
         super();
         this.attachShadow({ mode: 'open' });
         this.state = {
-            // App State
-            step: 'API_KEY', // 'API_KEY', 'FACE_BLEND', 'POSE_CLOTHING', 'RESULT'
+            // App State & UI
+            step: 'API_KEY', // API_KEY, FACE_BLEND, POSE_CLOTHING, RESULT
+            isGenerating: false, // For any AI generation
             // API & AI Client
             apiKey: null,
             aiClient: null,
-            isGenerating: false,
-            // User Inputs
-            person1: null,
-            person2: null,
-            blendRatio: 50,
-            blendedFace: null, // This will hold the result from step 1
+            // Face Blend (Step 1) State
+            blendSettings: {},
+            blendedFaces: [], // Array to hold multiple generated face images
+            selectedBlendedFace: null, // The face chosen by the user to proceed
+            // Pose & Clothing (Step 2) State
             pose: null,
             clothing: null,
-            finalResult: null, // This will hold the final generated image
+            // Result (Step 3) State
+            finalResult: null, 
         };
         this.render();
     }
@@ -26,10 +27,12 @@ class AppContainer extends HTMLElement {
     connectedCallback() {
         this.shadowRoot.addEventListener('click', this.handleClick.bind(this));
         this.shadowRoot.addEventListener('blend', this.handleBlend.bind(this));
+        this.shadowRoot.addEventListener('face-select', this.handleFaceSelect.bind(this)); // New event
         this.shadowRoot.addEventListener('generate-result', this.handleGenerate.bind(this));
-        this.shadowRoot.addEventListener('navigate', (e) => this.setState({ step: e.detail.step }));
+        this.shadowRoot.addEventListener('navigate', (e) => this.handleNavigation(e));
     }
 
+    // --- Event Handlers ---
     handleClick(e) {
         if (e.target.id === 'save-api-key-btn') {
             const apiKey = this.shadowRoot.querySelector('#api-key-input').value;
@@ -37,53 +40,87 @@ class AppContainer extends HTMLElement {
         }
     }
 
+    handleNavigation(e) {
+        const targetStep = e.detail.step;
+        // Reset state when going back
+        if (targetStep === 'FACE_BLEND') {
+            this.setState({
+                step: 'FACE_BLEND',
+                blendedFaces: [],
+                selectedBlendedFace: null,
+                pose: null,
+                clothing: null,
+                finalResult: null,
+            });
+        } else {
+            this.setState({ step: targetStep });
+        }
+    }
+
     handleApiKeySubmit(apiKey) {
         if (!apiKey) return;
         try {
             const aiClient = new GenerativeAi(apiKey);
-            this.setState({ 
-                apiKey: apiKey, 
-                aiClient: aiClient, 
-                step: 'FACE_BLEND'
-            });
+            this.setState({ apiKey, aiClient, step: 'FACE_BLEND' });
         } catch (error) {
-            console.error(error);
-            alert('Failed to initialize AI Client. Check your key.');
+            console.error(error); alert('Failed to initialize AI Client.');
         }
     }
-
+    
     async handleBlend(e) {
-        const { person1, person2, blendRatio } = e.detail;
-        console.log("Blending faces...", { person1, person2, blendRatio });
-        
-        // Here you would call the AI to blend faces
-        // For now, we'll just pretend and move to the next step
-        // and maybe use one of the images as a placeholder.
         this.setState({
-            person1,
-            person2,
-            blendRatio,
-            blendedFace: person1, // Placeholder for the blended face
-            step: 'POSE_CLOTHING'
+            isGenerating: true,
+            blendedFaces: [], // Clear previous results
+            selectedBlendedFace: null,
+            blendSettings: e.detail, // Save the settings from StepOne
         });
+
+        // --- Mock AI Call to generate multiple faces ---
+        console.log("Blending faces with settings:", this.state.blendSettings);
+        // Simulate a delay for each image generation
+        const generatedFaces = [];
+        const quantity = this.state.blendSettings.quantity || 1;
+        for (let i = 0; i < quantity; i++) {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 1s delay per image
+            const randomId = Math.floor(Math.random() * 1000);
+            generatedFaces.push({ 
+                id: `blend_${i}`,
+                src: `https://picsum.photos/512/512?random=${randomId}` // Unique placeholder
+            });
+             this.setState({ blendedFaces: [...generatedFaces] }); // Update UI progressively
+        }
+
+        this.setState({ isGenerating: false });
+    }
+
+    handleFaceSelect(e) {
+        const faceId = e.detail.id;
+        const selectedFace = this.state.blendedFaces.find(f => f.id === faceId);
+        this.setState({ selectedBlendedFace: selectedFace });
+        console.log("Face selected:", selectedFace);
     }
 
     async handleGenerate(e) {
-        const { pose, clothing } = e.detail;
-        console.log("Generating final result...", { blendedFace: this.state.blendedFace, pose, clothing });
         this.setState({ isGenerating: true, step: 'RESULT' });
+        const { pose, clothing } = e.detail;
 
-        // Mock AI call
+        console.log("Generating final result with:", { 
+            face: this.state.selectedBlendedFace,
+            pose: pose,
+            clothing: clothing
+        });
+
+        // --- Mock AI call ---
         setTimeout(() => {
-             this.setState({
-                pose,
-                clothing,
-                finalResult: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=800', // Placeholder image
+            this.setState({
+                pose, clothing,
+                finalResult: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=800', 
                 isGenerating: false
             });
         }, 2000);
     }
-
+    
+    // --- State & Rendering ---
     setState(newState) {
         Object.assign(this.state, newState);
         this.render();
@@ -94,37 +131,16 @@ class AppContainer extends HTMLElement {
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
             <style>
                 :host { display: block; }
-                .min-h-screen { min-height: 100vh; }
-                .bg-slate-50 { background-color: #f8fafc; }
-                .flex { display: flex; }
-                .items-center { align-items: center; }
-                .justify-center { justify-content: center; }
-                header { position: sticky; top: 0; z-index: 40; background-color: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid #e2e8f0; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); }
-                .max-w-5xl { max-width: 64rem; }
-                .mx-auto { margin-left: auto; margin-right: auto; }
-                .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
-                .h-16 { height: 4rem; }
-                .justify-between { justify-content: space-between; }
-                .gap-2 { gap: 0.5rem; }
-                .cursor-pointer { cursor: pointer; }
-                 .w-8 { width: 2rem; }
-                .h-8 { height: 2rem; }
-                .bg-gradient-to-tr { background-image: linear-gradient(to top right, var(--tw-gradient-stops)); }
-                .from-blue-600 { --tw-gradient-from: #2563eb; --tw-gradient-to: rgb(37 99 235 / 0); }
-                .to-indigo-600 { --tw-gradient-to: #4f46e5; }
-                .rounded-lg { border-radius: 0.5rem; }
-                .shadow-md { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
-                .font-bold { font-weight: 700; }
-                .text-slate-800 { color: #1e293b; }
-                .tracking-tight { letter-spacing: -0.025em; }
-                .text-xl { font-size: 1.25rem; }
                 main { max-width: 64rem; margin: 2rem auto 0; padding: 0 1.5rem 5rem; }
+                header { position: sticky; top: 0; z-index: 40; background-color: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid #e2e8f0; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1); }
+                /* Add other common styles from previous render methods */
             </style>
             ${this.state.step === 'API_KEY' ? this.renderApiKeyPrompt() : this.renderApp()}
         `;
     }
 
     renderApiKeyPrompt() {
+        // The HTML for the API Key prompt (same as before)
         return `
              <style>
                 .min-h-screen { min-height: 100vh; }
@@ -170,29 +186,43 @@ class AppContainer extends HTMLElement {
     }
 
     renderApp() {
+        let currentStepHtml;
+        switch (this.state.step) {
+            case 'FACE_BLEND':
+                // Pass generated faces and selection state to step-one
+                currentStepHtml = `
+                    <step-one 
+                        .blendedFaces='${JSON.stringify(this.state.blendedFaces)}' 
+                        .selectedBlendedFace='${JSON.stringify(this.state.selectedBlendedFace)}' 
+                        .isGenerating=${this.state.isGenerating}>
+                    </step-one>`;
+                break;
+            case 'POSE_CLOTHING':
+                currentStepHtml = `<step-two .baseImage='${JSON.stringify(this.state.selectedBlendedFace)}'></step-two>`;
+                break;
+            case 'RESULT':
+                currentStepHtml = `
+                    <step-three 
+                        .isGenerating=${this.state.isGenerating} 
+                        .generatedImage='${this.state.finalResult}'>
+                    </step-three>`;
+                break;
+            default:
+                currentStepHtml = ``;
+        }
+
         return `
-            <div>
-                <header>
-                    <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-                        <div class="flex items-center gap-2 cursor-pointer">
-                            <div class="w-8 h-8 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white shadow-md">
-                                <i class="fas fa-users-viewfinder text-sm"></i>
-                            </div>
-                            <span class="font-bold text-slate-800 tracking-tight text-xl">Face Blender AI</span>
+             <header>
+                <div style="max-width: 64rem; margin: 0 auto; padding: 0 1.5rem; height: 4rem; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;" onclick="this.getRootNode().host.dispatchEvent(new CustomEvent('navigate', { detail: { step: 'FACE_BLEND' }, bubbles: true, composed: true }))">
+                        <div style="width: 2rem; height: 2rem; background-image: linear-gradient(to top right, #2563eb, #4f46e5); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
+                            <i class="fas fa-users-viewfinder text-sm"></i>
                         </div>
+                        <span style="font-weight: 700; color: #1e293b; letter-spacing: -0.025em; font-size: 1.25rem;">Face Blender AI</span>
                     </div>
-                </header>
-                <main>
-                    ${ this.state.step === 'FACE_BLEND' ? '<step-one></step-one>' : '' }
-                    ${ this.state.step === 'POSE_CLOTHING' ? '<step-two></step-two>' : '' }
-                    ${ this.state.step === 'RESULT' ? `
-                        <step-three 
-                            .isGenerating=${this.state.isGenerating} 
-                            .generatedImage='${this.state.finalResult}'>
-                        </step-three>` : ''
-                    }
-                </main>
-            </div>
+                </div>
+            </header>
+            <main>${currentStepHtml}</main>
         `;
     }
 }
