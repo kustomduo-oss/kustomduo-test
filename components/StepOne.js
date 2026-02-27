@@ -3,37 +3,36 @@ class StepOne extends HTMLElement {
         super();
         this.attachShadow({ mode: 'open' });
 
-        // Component properties to receive from AppContainer
-        this.blendedFaces = [];
-        this.selectedBlendedFace = null;
-        this.isGenerating = false;
-
-        // Internal state for the form
         this.formState = {
             person1: null,
             person2: null,
             blendRatio: 50,
-            model: 'flash', 
+            model: 'flash',
             resolution: '1024x1024',
             aspectRatio: '1:1',
             quantity: 1,
             advancedSettingsVisible: false,
         };
     }
-    
-    // When the component is added to the page, parse the properties
+
     connectedCallback() {
-        this.blendedFaces = JSON.parse(this.getAttribute('blendedFaces') || '[]');
-        this.selectedBlendedFace = JSON.parse(this.getAttribute('selectedBlendedFace') || 'null');
-        this.isGenerating = this.getAttribute('isGenerating') === 'true';
         this.render();
         this.addEventListeners();
     }
 
+    static get observedAttributes() {
+        return ['blendedfaces', 'selectedblendedface', 'isgenerating'];
+    }
+
+    attributeChangedCallback(name, oldValue, newValue) {
+        if (oldValue !== newValue) {
+            this.render();
+            this.addEventListeners();
+        }
+    }
+
     addEventListeners() {
-        // Determine which view is active and add listeners accordingly
-        if (this.blendedFaces.length > 0) {
-            // Listeners for the results view
+        if (this.blendedFaces && this.blendedFaces.length > 0) {
             this.shadowRoot.querySelectorAll('.face-card').forEach(card => {
                 card.addEventListener('click', () => this.handleFaceSelect(card.dataset.id));
             });
@@ -42,25 +41,55 @@ class StepOne extends HTMLElement {
                 nextStepBtn.addEventListener('click', this.goToNextStep.bind(this));
             }
         } else {
-            // Listeners for the initial form view
-            this.shadowRoot.querySelector('#person1-upload').addEventListener('change', (e) => this.formState.person1 = e.detail);
-            this.shadowRoot.querySelector('#person2-upload').addEventListener('change', (e) => this.formState.person2 = e.detail);
-            this.shadowRoot.querySelector('#blend-slider').addEventListener('input', (e) => this.updateBlendRatio(e.target.value));
-            this.shadowRoot.querySelector('#blend-btn').addEventListener('click', this.handleBlend.bind(this));
-            this.shadowRoot.querySelector('#toggle-advanced').addEventListener('click', this.toggleAdvancedSettings.bind(this));
+            const person1Upload = this.shadowRoot.querySelector('#person1-upload');
+            if (person1Upload) {
+                person1Upload.addEventListener('change', (e) => this.formState.person1 = e.detail);
+            }
+
+            const person2Upload = this.shadowRoot.querySelector('#person2-upload');
+            if(person2Upload) {
+                person2Upload.addEventListener('change', (e) => this.formState.person2 = e.detail);
+            }
+
+            const blendSlider = this.shadowRoot.querySelector('#blend-slider');
+            if(blendSlider) {
+                blendSlider.addEventListener('input', (e) => this.updateBlendRatio(e.target.value));
+            }
+
+            const blendBtn = this.shadowRoot.querySelector('#blend-btn');
+            if(blendBtn) {
+                blendBtn.addEventListener('click', this.handleBlend.bind(this));
+            }
+
+            const toggleAdvanced = this.shadowRoot.querySelector('#toggle-advanced');
+            if(toggleAdvanced) {
+                toggleAdvanced.addEventListener('click', this.toggleAdvancedSettings.bind(this));
+            }
+            
             this.shadowRoot.querySelectorAll('.model-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     this.formState.model = e.currentTarget.dataset.model;
                     this.updateUI();
                 });
             });
-            this.shadowRoot.querySelector('#resolution').addEventListener('change', (e) => this.formState.resolution = e.target.value);
-            this.shadowRoot.querySelector('#aspect-ratio').addEventListener('change', (e) => this.formState.aspectRatio = e.target.value);
-            this.shadowRoot.querySelector('#quantity').addEventListener('change', (e) => this.formState.quantity = parseInt(e.target.value, 10));
+
+            const resolution = this.shadowRoot.querySelector('#resolution');
+            if(resolution) {
+                resolution.addEventListener('change', (e) => this.formState.resolution = e.target.value);
+            }
+
+            const aspectRatio = this.shadowRoot.querySelector('#aspect-ratio');
+            if(aspectRatio) {
+                aspectRatio.addEventListener('change', (e) => this.formState.aspectRatio = e.target.value);
+            }
+
+            const quantity = this.shadowRoot.querySelector('#quantity');
+            if(quantity) {
+                quantity.addEventListener('change', (e) => this.formState.quantity = parseInt(e.target.value, 10));
+            }
         }
     }
 
-    // --- Event Handlers ---
     handleBlend() {
         if (!this.formState.person1 || !this.formState.person2) {
             alert('Please upload both face images.');
@@ -71,7 +100,7 @@ class StepOne extends HTMLElement {
             bubbles: true, composed: true
         }));
     }
-    
+
     handleFaceSelect(faceId) {
         this.dispatchEvent(new CustomEvent('face-select', { 
             detail: { id: faceId },
@@ -90,7 +119,6 @@ class StepOne extends HTMLElement {
         }));
     }
 
-    // --- UI Updates ---
     updateBlendRatio(value) {
         this.formState.blendRatio = value;
         this.shadowRoot.querySelector('#slider-value').textContent = `${100 - this.formState.blendRatio}/${this.formState.blendRatio}`;
@@ -102,9 +130,8 @@ class StepOne extends HTMLElement {
         this.formState.advancedSettingsVisible = !this.formState.advancedSettingsVisible;
         this.updateUI();
     }
-    
+
     updateUI() {
-        // This method is now safe to call even if the elements aren't there
         this.shadowRoot.querySelectorAll('.model-btn').forEach(btn => {
             btn.classList.toggle('active', this.formState.model === btn.dataset.model);
         });
@@ -117,21 +144,23 @@ class StepOne extends HTMLElement {
         }
     }
 
-    // --- RENDER --- 
-    render() {
-        // Decide which view to show
-        if (this.isGenerating || this.blendedFaces.length > 0) {
-            this.shadowRoot.innerHTML = this.renderResults();
-        } else {
-            this.shadowRoot.innerHTML = this.renderForm();
-        }
-        this.updateUI(); // Ensure UI state is correct after rendering
+    get blendedFaces() {
+        const blendedFacesAttr = this.getAttribute('blendedfaces');
+        return blendedFacesAttr ? JSON.parse(blendedFacesAttr) : [];
+    }
+    
+    get selectedBlendedFace() {
+        const selectedBlendedFaceAttr = this.getAttribute('selectedblendedface');
+        return selectedBlendedFaceAttr ? JSON.parse(selectedBlendedFaceAttr) : null;
+    }
+    
+    get isGenerating() {
+        return this.getAttribute('isgenerating') === 'true';
     }
 
-    renderForm() {
-        // All the HTML for the initial form with image uploads and settings.
-        // This is the same as the previous render method content.
-        return `
+    render() {
+        const renderForm = () => {
+            return `
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
              <style>
                 :host { display: block; }
@@ -180,54 +209,62 @@ class StepOne extends HTMLElement {
                 </div>
             </div>
         `;
-    }
+        }
 
-    renderResults() {
-        const selectedId = this.selectedBlendedFace ? this.selectedBlendedFace.id : null;
+        const renderResults = () => {
+            const selectedId = this.selectedBlendedFace ? this.selectedBlendedFace.id : null;
         
-        return `
-            <style>
-                .results-header { text-align: center; margin-bottom: 2rem; }
-                .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; }
-                .face-card { position: relative; border-radius: 1rem; overflow: hidden; cursor: pointer; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transition: all 0.2s; border: 4px solid transparent; }
-                .face-card.selected { border-color: #2563eb; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.2); transform: translateY(-5px); }
-                .face-card img { display: block; width: 100%; height: 100%; object-fit: cover; }
-                .face-card .check-icon { position: absolute; top: 0.75rem; right: 0.75rem; width: 2rem; height: 2rem; background-color: #2563eb; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; opacity: 0; transform: scale(0.8); transition: all 0.2s; }
-                .face-card.selected .check-icon { opacity: 1; transform: scale(1); }
-                .loading-spinner, .loading-text { text-align: center; margin: 4rem 0; }
-                .spinner { margin: 0 auto; width: 56px; height: 56px; border: 8px solid #f1f5f9; border-left-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
-                @keyframes spin { to { transform: rotate(360deg); } }
-                .actions { text-align: center; margin-top: 2rem; }
-                #next-step-btn { background-color: #16a34a; color: white; font-weight: 700; padding: 1rem 2.5rem; border-radius: 0.75rem; border: none; cursor: pointer; transition: background-color 0.2s; }
-                #next-step-btn:disabled { background-color: #9ca3af; cursor: not-allowed; }
-                #next-step-btn:not(:disabled):hover { background-color: #15803d; }
-            </style>
-            <div class="results-header">
-                <h2 style="font-size: 1.875rem; font-weight: 800; color: #1e293b;">Select Your Base Face</h2>
-                <p style="color: #64748b; margin-top: 0.5rem;">Choose the best blended face to use in the next step.</p>
-            </div>
+            return `
+                <style>
+                    .results-header { text-align: center; margin-bottom: 2rem; }
+                    .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; }
+                    .face-card { position: relative; border-radius: 1rem; overflow: hidden; cursor: pointer; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transition: all 0.2s; border: 4px solid transparent; }
+                    .face-card.selected { border-color: #2563eb; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.2); transform: translateY(-5px); }
+                    .face-card img { display: block; width: 100%; height: 100%; object-fit: cover; }
+                    .face-card .check-icon { position: absolute; top: 0.75rem; right: 0.75rem; width: 2rem; height: 2rem; background-color: #2563eb; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; opacity: 0; transform: scale(0.8); transition: all 0.2s; }
+                    .face-card.selected .check-icon { opacity: 1; transform: scale(1); }
+                    .loading-spinner, .loading-text { text-align: center; margin: 4rem 0; }
+                    .spinner { margin: 0 auto; width: 56px; height: 56px; border: 8px solid #f1f5f9; border-left-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
+                    @keyframes spin { to { transform: rotate(360deg); } }
+                    .actions { text-align: center; margin-top: 2rem; }
+                    #next-step-btn { background-color: #16a34a; color: white; font-weight: 700; padding: 1rem 2.5rem; border-radius: 0.75rem; border: none; cursor: pointer; transition: background-color 0.2s; }
+                    #next-step-btn:disabled { background-color: #9ca3af; cursor: not-allowed; }
+                    #next-step-btn:not(:disabled):hover { background-color: #15803d; }
+                </style>
+                <div class="results-header">
+                    <h2 style="font-size: 1.875rem; font-weight: 800; color: #1e293b;">Select Your Base Face</h2>
+                    <p style="color: #64748b; margin-top: 0.5rem;">Choose the best blended face to use in the next step.</p>
+                </div>
+    
+                ${this.isGenerating && (!this.blendedFaces || this.blendedFaces.length === 0) ? `
+                    <div class="loading-spinner">
+                        <div class="spinner"></div>
+                        <p class="loading-text" style="margin-top: 1rem; font-weight: 600; color: #475569;">Generating blended faces...</p>
+                    </div>
+                ` : `
+                    <div class="results-grid">
+                        ${this.blendedFaces.map(face => `
+                            <div class="face-card ${selectedId === face.id ? 'selected' : ''}" data-id="${face.id}">
+                                <img src="${face.src}" alt="Blended Face ${face.id}">
+                                <div class="check-icon"><i class="fas fa-check"></i></div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="actions">
+                         <button id="next-step-btn" ${!this.selectedBlendedFace ? 'disabled' : ''}>
+                            Next Step <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                `}
+            `;
+        }
 
-            ${this.isGenerating && this.blendedFaces.length === 0 ? `
-                <div class="loading-spinner">
-                    <div class="spinner"></div>
-                    <p class="loading-text" style="margin-top: 1rem; font-weight: 600; color: #475569;">Generating blended faces...</p>
-                </div>
-            ` : `
-                <div class="results-grid">
-                    ${this.blendedFaces.map(face => `
-                        <div class="face-card ${selectedId === face.id ? 'selected' : ''}" data-id="${face.id}">
-                            <img src="${face.src}" alt="Blended Face ${face.id}">
-                            <div class="check-icon"><i class="fas fa-check"></i></div>
-                        </div>
-                    `).join('')}
-                </div>
-                <div class="actions">
-                     <button id="next-step-btn" ${!this.selectedBlendedFace ? 'disabled' : ''}>
-                        Next Step <i class="fas fa-arrow-right"></i>
-                    </button>
-                </div>
-            `}
-        `;
+        if (this.isGenerating || (this.blendedFaces && this.blendedFaces.length > 0)) {
+            this.shadowRoot.innerHTML = renderResults();
+        } else {
+            this.shadowRoot.innerHTML = renderForm();
+        }
+        this.updateUI();
     }
 }
 
